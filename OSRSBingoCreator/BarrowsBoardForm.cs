@@ -13,10 +13,8 @@ public class BarrowsBoardForm : Form
     private const float X_THICKNESS = 4f;
     private static readonly Color X_COLOR = Color.Red;
 
-    // Base path for the Images folder
     private static readonly string ImagesFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
 
-    // Mapping of images for each Barrows piece
     private readonly Dictionary<(int Row, int Column), string> _barrowsPieceImages = new Dictionary<(int, int), string>
     {
         { (0, 0), "Ahrim's_hood.png"  }, { (1, 0), "Ahrim's_robetop.png"    }, { (2, 0), "Ahrim's_robeskirt.png"   }, { (3, 0), "Ahrim's_staff.png"     },
@@ -27,24 +25,47 @@ public class BarrowsBoardForm : Form
         { (0, 5), "Verac's_helm.png"  }, { (1, 5), "Verac's_brassard.png"    }, { (2, 5), "Verac's_plateskirt.png"   }, { (3, 5), "Verac's_flail.png"     }
     };
 
-    // Notify when a column is fully completed
     public event Action<int> ColumnCompleted;
 
-    // Notify when a tile's completion state changes
     public event Action<bool, int> BarrowsTileCompletionChanged;
 
-    // Persist the completion state
     public bool[][] CompletionState { get; set; } = new bool[ROWS][];
 
     public BarrowsBoardForm()
     {
+        InitializeComponent();
+        
+        string imagesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images");
+        if (!Directory.Exists(imagesDir))
+        {
+            Directory.CreateDirectory(imagesDir);
+        }
+        
+        string placeholderPath = Path.Combine(imagesDir, "placeholder.png");
+        if (!File.Exists(placeholderPath))
+        {
+            using (Bitmap placeholder = new Bitmap(64, 64))
+            {
+                using (Graphics g = Graphics.FromImage(placeholder))
+                {
+                    g.Clear(Color.LightGray);
+                    using (Pen pen = new Pen(Color.Black, 1))
+                    {
+                        g.DrawRectangle(pen, 0, 0, 63, 63);
+                        g.DrawLine(pen, 0, 0, 63, 63);
+                        g.DrawLine(pen, 0, 63, 63, 0);
+                    }
+                }
+                placeholder.Save(placeholderPath, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+        
         this.Text = "Barrows Set Progress";
         this.Size = new Size(600, 400);
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox = false;
         this.MinimizeBox = false;
 
-        // Initialize CompletionState array
         for (int i = 0; i < ROWS; i++)
         {
             CompletionState[i] = new bool[COLUMNS];
@@ -58,7 +79,6 @@ public class BarrowsBoardForm : Form
             AutoSize = false
         };
 
-        // Set row and column styles
         for (int i = 0; i < COLUMNS; i++)
         {
             tableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / COLUMNS));
@@ -68,7 +88,6 @@ public class BarrowsBoardForm : Form
             tableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / ROWS));
         }
 
-        // Add PictureBoxes for each Barrows piece
         for (int row = 0; row < ROWS; row++)
         {
             for (int col = 0; col < COLUMNS; col++)
@@ -82,7 +101,6 @@ public class BarrowsBoardForm : Form
                     Name = $"PictureBox_{row}_{col}"
                 };
 
-                // Assign the correct image
                 if (_barrowsPieceImages.TryGetValue((row, col), out string imageName))
                 {
                     string imagePath = Path.Combine(ImagesFolderPath, imageName);
@@ -96,7 +114,6 @@ public class BarrowsBoardForm : Form
                     }
                 }
 
-                // Click event to toggle completion
                 pictureBox.Click += PictureBox_Click;
                 pictureBox.Paint += PictureBox_Paint;
 
@@ -111,17 +128,13 @@ public class BarrowsBoardForm : Form
     {
         if (sender is PictureBox pb && pb.Tag is BarrowsPieceTag tag)
         {
-            // Toggle completion state
             tag.IsCompleted = !tag.IsCompleted;
             CompletionState[tag.Row][tag.Column] = tag.IsCompleted;
 
-            // Redraw the PictureBox
             pb.Invalidate();
 
-            // Check if the column is now fully completed
             int completedColumn = GetCompletedColumn();
 
-            // Notify the parent form
             bool isAnyColumnComplete = completedColumn >= 0;
             BarrowsTileCompletionChanged?.Invoke(isAnyColumnComplete, completedColumn);
         }
@@ -129,7 +142,6 @@ public class BarrowsBoardForm : Form
 
     private void UpdateBarrowsSetImage(int completedColumn)
     {
-        // Map column indices to Barrows set images
         var barrowsSetImages = new Dictionary<int, string>
         {
             { 0, "Ahrim's_set.png" },

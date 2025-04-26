@@ -42,6 +42,36 @@ namespace OsrsBingoCreator
             SelectedImagePath = null;
             SelectedImageUrl = null;
             btnOK.Enabled = false;
+            
+            this.KeyPreview = true;
+            
+            this.KeyDown += ImageSelectorForm_KeyDown;
+            
+            txtSearchQuery.PreviewKeyDown += TxtSearchQuery_PreviewKeyDown;
+        }
+
+        private void TxtSearchQuery_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.IsInputKey = true;
+            }
+        }
+
+        private void ImageSelectorForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                
+                if (this.ActiveControl == txtSearchQuery && !string.IsNullOrWhiteSpace(txtSearchQuery.Text))
+                {
+                    this.BeginInvoke(new Action(() => {
+                        btnSearchWiki_Click(btnSearchWiki, EventArgs.Empty);
+                    }));
+                }
+            }
         }
 
         private async Task<string> UploadImageToImgur(string imagePath)
@@ -173,12 +203,8 @@ namespace OsrsBingoCreator
         {
             if (e.KeyCode == Keys.Enter)
             {
-                if (!string.IsNullOrWhiteSpace(txtSearchQuery.Text))
-                {
-                    btnSearchWiki.PerformClick();
-                    e.Handled = true;
-                    e.SuppressKeyPress = true;
-                }
+                e.Handled = true;
+                e.SuppressKeyPress = true;
             }
         }
 
@@ -273,6 +299,7 @@ namespace OsrsBingoCreator
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
+                ofd.AutoUpgradeEnabled = false;
                 ofd.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.gif;*.bmp";
                 ofd.Title = "Select a Local Image";
                 ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
@@ -371,6 +398,7 @@ namespace OsrsBingoCreator
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
+                ofd.AutoUpgradeEnabled = false;
                 ofd.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.gif;*.bmp";
                 ofd.Title = "Select an Image to Test Upload";
 

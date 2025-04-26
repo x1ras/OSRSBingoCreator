@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "OSRS Bingo Creator"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "x1ras"
 #define MyAppURL "https://github.com/x1ras/OSRSBingoCreator"
 #define MyAppExeName "OSRSBingoCreator.exe"
@@ -28,7 +28,7 @@ DisableProgramGroupPage=yes
 ; Remove the following line to run in administrative install mode (install for all users).
 PrivilegesRequired=lowest
 OutputDir=C:\Users\Jon\source\repos\OSRSBingoCreator
-OutputBaseFilename=OSRSBingoCreator_Setup.exe
+OutputBaseFilename=OSRSBingoCreator_Setup
 SolidCompression=yes
 WizardStyle=modern
 

@@ -175,8 +175,6 @@ namespace OsrsBingoCreator
                         CreateBoardGrid();
                         PopulateUIFromData();
                         UpdateAllTotals();
-
-                        MessageBox.Show($"Board loaded successfully from:\n{ofd.FileName}", "Load Successful", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     catch (JsonException jsonEx)
                     {
@@ -1016,6 +1014,8 @@ namespace OsrsBingoCreator
             {
                 using (var httpClient = new HttpClient())
                 {
+                    httpClient.DefaultRequestHeaders.Add("User-Agent", "OSRSBingoCreator/1.0 (https://github.com/x1ras/OSRSBingoCreator)");
+                    
                     var imageBytes = await httpClient.GetByteArrayAsync(url);
                     using (var ms = new MemoryStream(imageBytes))
                     {
@@ -1043,6 +1043,14 @@ namespace OsrsBingoCreator
                             pb.Image?.Dispose();
                             pb.Image = image;
                             _imageCache.CacheImage(tile.ImageUrl, image);
+                            
+                            var existingTag = pb.Tag as PictureBoxTag;
+                            pb.Tag = new PictureBoxTag
+                            {
+                                Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
+                                FilePath = tile.ImagePath,
+                                ImageUrl = tile.ImageUrl
+                            };
                         }));
                     }
                     else
@@ -1050,12 +1058,28 @@ namespace OsrsBingoCreator
                         pb.Image?.Dispose();
                         pb.Image = image;
                         _imageCache.CacheImage(tile.ImageUrl, image);
+                        
+                        var existingTag = pb.Tag as PictureBoxTag;
+                        pb.Tag = new PictureBoxTag
+                        {
+                            Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
+                            FilePath = tile.ImagePath,
+                            ImageUrl = tile.ImageUrl
+                        };
                     }
+                }
+                else
+                {
+                    Debug.WriteLine($"Failed to load image from URL (null returned): {tile.ImageUrl}");
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error in LoadAndCacheUrlImageAsync: {ex.Message}");
+                if (ex is HttpRequestException)
+                {
+                    Debug.WriteLine($"HTTP error loading image: {ex.Message}");
+                }
             }
         }
 
@@ -1247,19 +1271,12 @@ namespace OsrsBingoCreator
                     if (cachedImage != null)
                     {
                         pb.Image = cachedImage;
+                        SetPictureBoxTag();
                     }
                     else
                     {
                         _ = LoadAndCacheUrlImageAsync(pb, tile);
                     }
-
-                    var existingTag = pb.Tag as PictureBoxTag;
-                    pb.Tag = new PictureBoxTag
-                    {
-                        Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
-                        FilePath = tile.ImagePath,
-                        ImageUrl = tile.ImageUrl
-                    };
                 }
                 catch (Exception ex)
                 {
@@ -1287,25 +1304,30 @@ namespace OsrsBingoCreator
                     if (cachedImage != null)
                     {
                         pb.Image = cachedImage;
+                        SetPictureBoxTag();
                     }
                     else
                     {
                         pb.Image = Image.FromFile(tile.ImagePath);
                         _imageCache.CacheImage(tile.ImagePath, pb.Image);
+                        SetPictureBoxTag();
                     }
-
-                    var existingTag = pb.Tag as PictureBoxTag;
-                    pb.Tag = new PictureBoxTag
-                    {
-                        Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
-                        FilePath = tile.ImagePath,
-                        ImageUrl = tile.ImageUrl
-                    };
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error loading image {tile.ImagePath}: {ex.Message}");
                 }
+            }
+            
+            void SetPictureBoxTag()
+            {
+                var existingTag = pb.Tag as PictureBoxTag;
+                pb.Tag = new PictureBoxTag
+                {
+                    Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
+                    FilePath = tile.ImagePath,
+                    ImageUrl = tile.ImageUrl
+                };
             }
         }
 
@@ -1429,35 +1451,41 @@ namespace OsrsBingoCreator
                         tile.Title = TITLE_PLACEHOLDER;
                         tile.IsCompleted = false;
                         tile.ImagePath = null;
+                        tile.ImageUrl = null;
                         pb.Image?.Dispose();
                         pb.Image = null;
                         pb.BackColor = Color.Transparent;
-                        MessageBox.Show("This tile has been reverted to a normal tile.", "Normal Tile", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        
+                        ShowSilentMessageBox("This tile has been reverted to a normal tile.", 
+                            "Normal Tile", MessageBoxButtons.OK, MessageBoxIcon.None);
                     }
                     else
                     {
                         tile.Title = "Barrows Set";
                         tile.IsCompleted = false;
-
-                        string barrowsImagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "25700.png");
-                        if (File.Exists(barrowsImagePath))
+                        
+                        string barrowsImageUrl = "https://oldschool.runescape.wiki/images/Dharok%27s_armour_equipped_male.png";
+                        tile.ImageUrl = barrowsImageUrl;
+                        
+                        try
                         {
-                            pb.Image?.Dispose();
-                            pb.Image = Image.FromFile(barrowsImagePath);
-                            tile.ImagePath = barrowsImagePath;
+                            _ = LoadAndCacheUrlImageAsync(pb, tile);
+                            
+                            pb.Tag = new PictureBoxTag
+                            {
+                                Coordinates = coordinates,
+                                ImageUrl = barrowsImageUrl
+                            };
+                            
+                            ShowSilentMessageBox("This tile has been set as a Barrows tile.", 
+                                "Barrows Tile", MessageBoxButtons.OK, MessageBoxIcon.None);
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            MessageBox.Show("The Barrows tile image (25700.png) could not be found.", "Image Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            Debug.WriteLine($"Error setting Barrows tile: {ex.Message}");
+                            MessageBox.Show("Error setting Barrows tile. Please check your internet connection.", 
+                                "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
-
-                        pb.Tag = new PictureBoxTag
-                        {
-                            Coordinates = coordinates,
-                            FilePath = tile.ImagePath
-                        };
-
-                        MessageBox.Show("This tile has been set as a Barrows tile.", "Barrows Tile", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                 }
             }
@@ -1951,42 +1979,29 @@ namespace OsrsBingoCreator
             {
                 try
                 {
-                    string imagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", imageName);
-                    if (File.Exists(imagePath))
+                    string imageUrl = $"https://oldschool.runescape.wiki/w/Dharok_the_Wretched%27s_equipment#/media/File:Dharok's_armour_equipped_male.png";
+                    
+                    tile.ImageUrl = imageUrl;
+                    tile.ImagePath = null;
+                    
+                    _ = LoadAndCacheUrlImageAsync(pb, tile);
+                    
+                    if (pb.Tag is PictureBoxTag tag)
                     {
-                        pb.Image?.Dispose();
-                        pb.Image = null;
-
-                        using (var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
+                        pb.Tag = new PictureBoxTag
                         {
-                            pb.Image = Image.FromStream(stream);
-                        }
-                        
-                        tile.ImagePath = imagePath;
-                        
-                        if (pb.Tag is PictureBoxTag tag)
-                        {
-                            pb.Tag = new PictureBoxTag
-                            {
-                                Coordinates = tag.Coordinates,
-                                FilePath = imagePath
-                            };
-                        }
-
-                        _imageCache.CacheImage(imagePath, pb.Image);
-
-                        pb.Invalidate();
+                            Coordinates = tag.Coordinates,
+                            ImageUrl = imageUrl
+                        };
                     }
-                    else
-                    {
-                        Debug.WriteLine($"Image not found for completed column {completedColumn}: {imagePath}");
-                        MessageBox.Show($"Could not find Barrows set image: {imageName}", "Image Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
+                    
+                    pb.Invalidate();
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error updating Barrows tile image: {ex.Message}");
-                    MessageBox.Show($"Error updating Barrows tile image: {ex.Message}", "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Error updating Barrows tile image. Please check your internet connection.", 
+                        "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -2169,6 +2184,18 @@ namespace OsrsBingoCreator
             string extension = Path.GetExtension(filePath)?.ToLowerInvariant();
             return SUPPORTED_IMAGE_EXTENSIONS.Contains(extension);
         }
+
+        private void ShowSilentMessageBox(string message, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
+        {
+            try
+            {
+                MessageBox.Show(message, title, buttons, icon);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error showing message box: {ex.Message}");
+            }
+        }
     }
 
     public class PictureBoxTag
@@ -2176,5 +2203,11 @@ namespace OsrsBingoCreator
         public Point? Coordinates { get; set; }
         public string FilePath { get; set; }
         public string ImageUrl { get; set; }
-    }   
+    }
+
+    internal static class NativeMethods
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        internal static extern bool MessageBeep(uint uType);
+    }
 }

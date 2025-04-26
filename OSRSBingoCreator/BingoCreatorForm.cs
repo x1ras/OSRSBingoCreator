@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Net.Http;
 using OSRSBingoCreator;
 using OSRSBingoCreator.Models;
 
@@ -942,7 +943,7 @@ namespace OsrsBingoCreator
             }
         }
 
-        private async Task UpdateTileImageAsync(PictureBox pb, BingoTile tile, string imagePath)
+        private async Task UpdateTileImageAsync(PictureBox pb, BingoTile tile, string imagePath, string imageUrl = null)
         {
             if (!IsValidImageFile(imagePath))
             {
@@ -963,13 +964,15 @@ namespace OsrsBingoCreator
                 if (pb.Image != null)
                 {
                     tile.ImagePath = imagePath;
+                    tile.ImageUrl = imageUrl;
 
                     if (pb.Tag is PictureBoxTag tag)
                     {
                         pb.Tag = new PictureBoxTag
                         {
                             Coordinates = tag.Coordinates,
-                            FilePath = imagePath
+                            FilePath = imagePath,
+                            ImageUrl = imageUrl
                         };
                     }
                     else
@@ -977,7 +980,8 @@ namespace OsrsBingoCreator
                         pb.Tag = new PictureBoxTag
                         {
                             Coordinates = new Point(tile.Column, tile.Row),
-                            FilePath = imagePath
+                            FilePath = imagePath,
+                            ImageUrl = imageUrl
                         };
                     }
 
@@ -992,24 +996,67 @@ namespace OsrsBingoCreator
             }
         }
 
-        private async Task<Image> LoadImageAsync(string path)
+        private async Task<Image> LoadImageAsync(string filePath)
         {
-            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
-
             return await Task.Run(() =>
             {
-                try
+                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
-                    {
-                        return Image.FromStream(stream);
-                    }
-                }
-                catch
-                {
-                    return null;
+                    return Image.FromStream(stream);
                 }
             });
+        }
+
+        private async Task<Image> LoadImageFromUrlAsync(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return null;
+                
+            try
+            {
+                using (var httpClient = new HttpClient())
+                {
+                    var imageBytes = await httpClient.GetByteArrayAsync(url);
+                    using (var ms = new MemoryStream(imageBytes))
+                    {
+                        return Image.FromStream(ms);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to load image from URL: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task LoadAndCacheUrlImageAsync(PictureBox pb, BingoTile tile)
+        {
+            try 
+            {
+                var image = await LoadImageFromUrlAsync(tile.ImageUrl);
+                if (image != null)
+                {
+                    if (pb.InvokeRequired)
+                    {
+                        pb.Invoke(new Action(() => {
+                            pb.Image?.Dispose();
+                            pb.Image = image;
+                            _imageCache.CacheImage(tile.ImageUrl, image);
+                        }));
+                    }
+                    else
+                    {
+                        pb.Image?.Dispose();
+                        pb.Image = image;
+                        _imageCache.CacheImage(tile.ImageUrl, image);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error in LoadAndCacheUrlImageAsync: {ex.Message}");
+            }
         }
 
         private async Task<string> CacheImageAsync(string originalPath)
@@ -1041,15 +1088,6 @@ namespace OsrsBingoCreator
                 Debug.WriteLine($"Error caching image: {ex.Message}");
                 return null;
             }
-        }
-
-        private bool IsValidImageFile(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) 
-                return false;
-
-            string ext = Path.GetExtension(filePath).ToLowerInvariant();
-            return SUPPORTED_IMAGE_EXTENSIONS.Contains(ext);
         }
 
         private void HandleDelayedLayoutUpdate(object sender, EventArgs e)
@@ -1201,8 +1239,48 @@ namespace OsrsBingoCreator
             pb.Tag = null;
             pb.BackColor = Color.FromArgb(tile.BackgroundColourArgb);
 
-            if (!string.IsNullOrEmpty(tile.ImagePath) && File.Exists(tile.ImagePath))
+            if (!string.IsNullOrEmpty(tile.ImageUrl))
             {
+                try
+                {
+                    var cachedImage = _imageCache.RetrieveImage(tile.ImageUrl);
+                    if (cachedImage != null)
+                    {
+                        pb.Image = cachedImage;
+                    }
+                    else
+                    {
+                        _ = LoadAndCacheUrlImageAsync(pb, tile);
+                    }
+
+                    var existingTag = pb.Tag as PictureBoxTag;
+                    pb.Tag = new PictureBoxTag
+                    {
+                        Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
+                        FilePath = tile.ImagePath,
+                        ImageUrl = tile.ImageUrl
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error loading image URL {tile.ImageUrl}: {ex.Message}");
+                    TryLoadLocalImage();
+                }
+            }
+            else if (!string.IsNullOrEmpty(tile.ImagePath) && File.Exists(tile.ImagePath))
+            {
+                TryLoadLocalImage();
+            }
+
+            if (tile.IsCompleted)
+            {
+                DrawCompletionX(pb);
+            }
+            
+            void TryLoadLocalImage()
+            {
+                if (string.IsNullOrEmpty(tile.ImagePath) || !File.Exists(tile.ImagePath)) return;
+                
                 try
                 {
                     var cachedImage = _imageCache.RetrieveImage(tile.ImagePath);
@@ -1220,18 +1298,14 @@ namespace OsrsBingoCreator
                     pb.Tag = new PictureBoxTag
                     {
                         Coordinates = existingTag?.Coordinates ?? new Point(tile.Column, tile.Row),
-                        FilePath = tile.ImagePath
+                        FilePath = tile.ImagePath,
+                        ImageUrl = tile.ImageUrl
                     };
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error loading image {tile.ImagePath}: {ex.Message}");
                 }
-            }
-
-            if (tile.IsCompleted)
-            {
-                DrawCompletionX(pb);
             }
         }
 
@@ -1739,9 +1813,14 @@ namespace OsrsBingoCreator
                     {
                         using (var imageSelectorForm = new ImageSelectorForm())
                         {
-                            if (imageSelectorForm.ShowDialog() == DialogResult.OK && !string.IsNullOrEmpty(imageSelectorForm.SelectedImagePath))
+                            if (imageSelectorForm.ShowDialog() == DialogResult.OK && 
+                                !string.IsNullOrEmpty(imageSelectorForm.SelectedImagePath))
                             {
-                                _ = UpdateTileImageAsync(pb, tile, imageSelectorForm.SelectedImagePath);
+                                _ = UpdateTileImageAsync(
+                                    pb, 
+                                    tile, 
+                                    imageSelectorForm.SelectedImagePath, 
+                                    imageSelectorForm.SelectedImageUrl);
                             }
                         }
                     }
@@ -2081,11 +2160,21 @@ namespace OsrsBingoCreator
             pb.Paint -= PictureBox_Paint;
             pb.Invalidate();
         }
+
+        private bool IsValidImageFile(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return false;
+
+            string extension = Path.GetExtension(filePath)?.ToLowerInvariant();
+            return SUPPORTED_IMAGE_EXTENSIONS.Contains(extension);
+        }
     }
 
     public class PictureBoxTag
     {
         public Point? Coordinates { get; set; }
         public string FilePath { get; set; }
+        public string ImageUrl { get; set; }
     }   
 }

@@ -1965,27 +1965,25 @@ namespace OsrsBingoCreator
 
         private void UpdateBarrowsTileImage(PictureBox pb, BingoTile tile, int completedColumn)
         {
-            var barrowsSetImages = new Dictionary<int, string>
-            {
-                { 0, "Ahrim's_set.png" },
-                { 1, "Dharok's_set.png" },
-                { 2, "Guthan's_set.png" },
-                { 3, "Karil's_set.png" },
-                { 4, "Torag's_set.png" },
-                { 5, "Verac's_set.png" }
-            };
+            var barrowsSetImageUrls = new Dictionary<int, string>
+    {
+        { 0, "https://oldschool.runescape.wiki/images/Ahrim%27s_robes_equipped_male.png" },
+        { 1, "https://oldschool.runescape.wiki/images/Dharok%27s_armour_equipped_male.png" },
+        { 2, "https://oldschool.runescape.wiki/images/Guthan%27s_armour_equipped_male.png" },
+        { 3, "https://oldschool.runescape.wiki/images/Karil%27s_armour_equipped_male.png" },
+        { 4, "https://oldschool.runescape.wiki/images/Torag%27s_armour_equipped_male.png" },
+        { 5, "https://oldschool.runescape.wiki/images/Verac%27s_armour_equipped_male.png" }
+    };
 
-            if (barrowsSetImages.TryGetValue(completedColumn, out string imageName))
+            if (barrowsSetImageUrls.TryGetValue(completedColumn, out string imageUrl))
             {
                 try
                 {
-                    string imageUrl = $"https://oldschool.runescape.wiki/w/Dharok_the_Wretched%27s_equipment#/media/File:Dharok's_armour_equipped_male.png";
-                    
                     tile.ImageUrl = imageUrl;
                     tile.ImagePath = null;
-                    
+
                     _ = LoadAndCacheUrlImageAsync(pb, tile);
-                    
+
                     if (pb.Tag is PictureBoxTag tag)
                     {
                         pb.Tag = new PictureBoxTag
@@ -1994,17 +1992,18 @@ namespace OsrsBingoCreator
                             ImageUrl = imageUrl
                         };
                     }
-                    
+
                     pb.Invalidate();
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Error updating Barrows tile image: {ex.Message}");
-                    MessageBox.Show($"Error updating Barrows tile image. Please check your internet connection.", 
+                    MessageBox.Show($"Error updating Barrows tile image. Please check your internet connection.",
                         "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
+
 
         private void OnBarrowsTileCompletionChanged(bool isAnyColumnComplete, int completedColumn)
         {
@@ -2013,32 +2012,36 @@ namespace OsrsBingoCreator
 
             if (isAnyColumnComplete && completedColumn >= 0)
             {
-                var barrowsSetImages = new Dictionary<int, string>
-                {
-                    { 0, "Ahrim's_set.png" },
-                    { 1, "Dharok's_set.png" },
-                    { 2, "Guthan's_set.png" },
-                    { 3, "Karil's_set.png" },
-                    { 4, "Torag's_set.png" },
-                    { 5, "Verac's_set.png" }
-                };
+                var barrowsSetImageUrls = new Dictionary<int, string>
+        {
+        { 0, "https://oldschool.runescape.wiki/images/Ahrim%27s_robes_equipped_male.png" },
+        { 1, "https://oldschool.runescape.wiki/images/Dharok%27s_armour_equipped_male.png" },
+        { 2, "https://oldschool.runescape.wiki/images/Guthan%27s_armour_equipped_male.png" },
+        { 3, "https://oldschool.runescape.wiki/images/Karil%27s_armour_equipped_male.png" },
+        { 4, "https://oldschool.runescape.wiki/images/Torag%27s_armour_equipped_male.png" },
+        { 5, "https://oldschool.runescape.wiki/images/Verac%27s_armour_equipped_male.png" }
+        };
 
-                if (barrowsSetImages.TryGetValue(completedColumn, out string imageName))
+                if (barrowsSetImageUrls.TryGetValue(completedColumn, out string imageUrl))
                 {
-                    string imagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Images", imageName);
-                    if (File.Exists(imagePath))
+                    barrowsTile.ImageUrl = imageUrl;
+                    barrowsTile.ImagePath = null;
+
+                    var pb = GetPictureBoxForTile(barrowsTile);
+                    if (pb != null)
                     {
-                        barrowsTile.ImagePath = imagePath;
-                        UpdateTileImage(barrowsTile, imagePath);
+                        _ = LoadAndCacheUrlImageAsync(pb, barrowsTile);
                     }
                 }
             }
             else
             {
+                barrowsTile.ImageUrl = null;
                 barrowsTile.ImagePath = null;
                 ClearTileImage(GetPictureBoxForTile(barrowsTile), barrowsTile);
             }
         }
+
 
         private PictureBox GetPictureBoxForTile(BingoTile tile)
         {
